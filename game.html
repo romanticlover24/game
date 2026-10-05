@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>document</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Game">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    
+    <link rel="manifest" href='data:application/json,{"name":"Game","short_name":"Game","start_url":".","display":"standalone","background_color":"#0f172a","theme_color":"#0f172a"}'>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0f172a;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+        }
+        
+        #rotateNotice {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            color: #fff;
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        #rotateNotice span { font-size: 50px; margin-bottom: 15px; }
+        #rotateNotice p { font-size: 18px; font-weight: bold; }
+
+        @media screen and (orientation: portrait) {
+            #rotateNotice { display: flex !important; }
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 10;
+        }
+        .hidden { display: none !important; }
+        
+        .menu-btn {
+            background: #e11d48;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 32px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-top: 15px;
+        }
+        .menu-btn:active { transform: scale(0.96); }
+        
+        #pauseBtn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 5;
+            background: rgba(2, 132, 199, 0.85);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 30px;
+            pointer-events: none;
+            z-index: 4;
+        }
+        .action-btn {
+            pointer-events: auto;
+            background: rgba(225, 29, 72, 0.85);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 72px;
+            height: 72px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .action-btn:active { background: rgba(190, 18, 60, 0.95); }
+
+        .credits-modal {
+            max-width: 85%;
+            max-height: 80vh;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 25px;
+            border-radius: 16px;
+            border: 2px solid #f43f5e;
+            color: #fff;
+            text-align: left;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+<div id="rotateNotice">
+    <span>🔄</span>
+    <p>Пожалуйста, переверните телефон горизонтально (в альбомный режим)</p>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<button id="pauseBtn" class="hidden">⏸️</button>
+
+<div id="startMenu" class="overlay">
+    <button class="menu-btn" id="startBtn">СТАРТ</button>
+</div>
+
+<div id="pauseMenu" class="overlay hidden">
+    <button class="menu-btn" id="resumeBtn">ПРОДОЛЖИТЬ</button>
+    <button class="menu-btn" id="restartPauseBtn" style="background: #0284c7;">НАЧАТЬ ЗАНОВО</button>
+</div>
+
+<div id="gameOverMenu" class="overlay hidden">
+    <p id="failReason" style="color: #fff; margin-bottom: 15px; font-size: 16px;"></p>
+    <button class="menu-btn" id="retryBtn">ПОПРОБОВАТЬ СНОВА</button>
+</div>
+
+<div id="finalMenu" class="overlay hidden" style="background: transparent; justify-content: flex-end; padding-bottom: 80px;">
+    <button class="menu-btn" id="forBelovedBtn" style="background: #f43f5e; font-size: 20px;">ДЛЯ ЛЮБИМОЙ ❤️</button>
+</div>
+
+<div id="creditsModal" class="overlay hidden" style="z-index: 20;">
+    <div class="credits-modal">
+        <div id="creditsText" style="font-size: 15px; white-space: pre-wrap; font-family: sans-serif;">
+этот текст персонально для моей любимой как и вся игра)
+Айгуля я тебя люблю очень сильно и буду делать все что могу чтобы ты была счастлива. иногда тебя не покидают мысли о чём-то плохом, ты думаешь что мешаешь мне но не будь тебя я бы такую игру не написал)
+да, отчасти это не моих рук дело, но как бы я тоже постарался, как говорится "не спиздил а адаптировал")
+короче говоря не будь тебя я бы страдал хернёй, спасибо что ты есть у меня и не думай что ты как-то мешаешь мне, ты лучшая кого я встречал и я сделаю все что могу чтобы ты так не думала.
+люблю тебя Айгуля, очень сильно люблю)
+        </div>
+        <div style="text-align: center;">
+            <button class="menu-btn" id="closeCreditsBtn">ЗАКРЫТЬ</button>
+        </div>
+    </div>
+</div>
+
+<div class="touch-controls">
+    <button class="action-btn" id="jumpBtn">⬆️</button>
+    <button class="action-btn" id="duckBtn">⬇️</button>
+</div>
+
+<script>
+function enableFullscreen() {
+    let doc = document.documentElement;
+    if (doc.requestFullscreen) {
+        doc.requestFullscreen().catch(() => {});
+    } else if (doc.webkitRequestFullscreen) {
+        doc.webkitRequestFullscreen().catch(() => {});
+    }
+}
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+let gameState = 'START';
+let currentObstacleCount = 0;
+const TOTAL_OBSTACLES = 20;
+
+const groundY = () => canvas.height - 80;
+const P = 4; 
+
+let globalTime = 0;
+
+const player = {
+    x: 100,
+    y: 0,
+    width: 8 * P,
+    height: 16 * P,
+    normalHeight: 16 * P,
+    duckHeight: 9 * P,
+    velocityY: 0,
+    gravity: 0.65,
+    jumpForce: -11.7,
+    isGrounded: true,
+    isDucking: false,
+    hairColor: '#a16207'
+};
+
+const aygul = { x: 0, y: 0, width: 8 * P, height: 16 * P };
+
+let obstacles = [];
+let nextSpawnTimer = 0;
+let obstacleQueue = [];
+let bgScrollX = 0; 
+let finalTimerStarted = false;
+
+const ALL_TYPES = ['HUMAN', 'TREE', 'CAR', 'BIRD'];
+
+function initQueue() {
+    obstacleQueue = [];
+    for(let i = 0; i < TOTAL_OBSTACLES; i++) {
+        let randomType = ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+        obstacleQueue.push(randomType);
+    }
+}
+
+const startMenu = document.getElementById('startMenu');
+const pauseMenu = document.getElementById('pauseMenu');
+const gameOverMenu = document.getElementById('gameOverMenu');
+const finalMenu = document.getElementById('finalMenu');
+const creditsModal = document.getElementById('creditsModal');
+const pauseBtn = document.getElementById('pauseBtn');
+const failReason = document.getElementById('failReason');
+
+document.getElementById('startBtn').addEventListener('click', () => { enableFullscreen(); startGame(); });
+document.getElementById('resumeBtn').addEventListener('click', togglePause);
+document.getElementById('restartPauseBtn').addEventListener('click', startGame);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+document.getElementById('forBelovedBtn').addEventListener('click', () => creditsModal.classList.remove('hidden'));
+document.getElementById('closeCreditsBtn').addEventListener('click', () => creditsModal.classList.add('hidden'));
+pauseBtn.addEventListener('click', togglePause);
+
+function togglePause() {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        pauseMenu.classList.remove('hidden');
+    } else if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        pauseMenu.classList.add('hidden');
+    }
+}
+
+window.addEventListener('keydown', (e) => {
+    if ((e.code === 'Space' || e.code === 'ArrowUp') && gameState === 'PLAYING') jump();
+    if (e.code === 'ArrowDown' && gameState === 'PLAYING') duck(true);
+});
+window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowDown') duck(false);
+});
+
+const jumpBtn = document.getElementById('jumpBtn');
+const duckBtn = document.getElementById('duckBtn');
+
+jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if(gameState==='PLAYING') jump(); }, { passive: false });
+jumpBtn.addEventListener('mousedown', () => { if(gameState==='PLAYING') jump(); });
+
+duckBtn.addEventListener('touchstart', (e) => { e.preventDefault(); duck(true); }, { passive: false });
+duckBtn.addEventListener('touchend', (e) => { e.preventDefault(); duck(false); }, { passive: false });
+duckBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); duck(false); }, { passive: false });
+duckBtn.addEventListener('mousedown', () => duck(true));
+duckBtn.addEventListener('mouseup', () => duck(false));
+
+function jump() {
+    if (player.isGrounded && !player.isDucking) {
+        player.velocityY = player.jumpForce;
+        player.isGrounded = false;
+    }
+}
+
+function duck(enable) {
+    if (player.isDucking === enable) return;
+    
+    player.isDucking = enable;
+    if (enable) {
+        player.height = player.duckHeight;
+    } else {
+        player.height = player.normalHeight;
+    }
+}
+
+function startGame() {
+    gameState = 'PLAYING';
+    finalTimerStarted = false;
+    startMenu.classList.add('hidden');
+    gameOverMenu.classList.add('hidden');
+    pauseMenu.classList.add('hidden');
+    finalMenu.classList.add('hidden');
+    creditsModal.classList.add('hidden');
+    pauseBtn.classList.remove('hidden');
+
+    obstacles = [];
+    currentObstacleCount = 0;
+    initQueue();
+    player.x = canvas.width * 0.15;
+    player.height = player.normalHeight;
+    player.y = groundY() - player.normalHeight;
+    player.isDucking = false;
+    player.velocityY = 0;
+    player.isGrounded = true;
+    aygul.x = canvas.width + 100;
+}
+
+function triggerGameOver(type) {
+    gameState = 'GAMEOVER';
+    pauseBtn.classList.add('hidden');
+    
+    let reasonText = 'Будь внимательнее!';
+    if (type === 'HUMAN') reasonText = 'Ты врезалась в прохожего!';
+    if (type === 'TREE') reasonText = 'Ты зацепила дерево!';
+    if (type === 'CAR') reasonText = 'Ты попала под машину!';
+    if (type === 'BIRD') reasonText = 'Птица задела тебя!';
+    
+    failReason.innerText = reasonText;
+    gameOverMenu.classList.remove('hidden');
+}
+
+function spawnObstacle() {
+    if (obstacleQueue.length === 0) return;
+    const type = obstacleQueue.shift();
+
+    if (type === 'HUMAN') {
+        obstacles.push({ x: canvas.width + 50, y: groundY() - (15 * P), width: 8 * P, height: 15 * P, type: 'HUMAN' });
+    } else if (type === 'TREE') {
+        obstacles.push({ x: canvas.width + 50, y: groundY() - (14 * P), width: 7 * P, height: 14 * P, type: 'TREE' });
+    } else if (type === 'CAR') {
+        obstacles.push({ x: canvas.width + 50, y: groundY() - (10 * P), width: 16 * P, height: 10 * P, type: 'CAR' });
+    } else if (type === 'BIRD') {
+        obstacles.push({ x: canvas.width + 50, y: groundY() - (20 * P), width: 10 * P, height: 8 * P, type: 'BIRD' });
+    }
+    currentObstacleCount++;
+}
+
+function drawPixelRect(x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+}
+
+const cityBuildings = [
+    { width: 140, height: 210, colorMorning: '#38bdf8', colorEvening: '#1e293b', winMorning: '#e0f2fe', winEvening: '#fbbf24', type: 'HOUSE1' },
+    { width: 120, height: 320, colorMorning: '#0284c7', colorEvening: '#0f172a', winMorning: '#bae6fd', winEvening: '#fbbf24', type: 'SKYSCRAPER' },
+    { width: 160, height: 180, colorMorning: '#818cf8', colorEvening: '#312e81', winMorning: '#e0e7ff', winEvening: '#fef08a', type: 'HOUSE2' },
+    { width: 130, height: 240, colorMorning: '#f43f5e', colorEvening: '#881337', winMorning: '#ffe4e6', winEvening: '#fbbf24', type: 'HOUSE3' }
+];
+
+function drawCityBackground() {
+    const isEvening = (gameState === 'FINALE' || gameState === 'END');
+
+    ctx.fillStyle = isEvening ? '#701a75' : '#bae6fd';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (!isEvening) {
+        drawPixelRect(80, 50, 48, 48, '#fef08a');
+    } else {
+        drawPixelRect(80, groundY() - 110, 56, 56, '#fb923c');
+    }
+
+    if (gameState === 'PLAYING') bgScrollX += 1.2;
+
+    const gap = 120;
+    let totalPanoramaWidth = 0;
+    cityBuildings.forEach(b => totalPanoramaWidth += b.width + gap);
+
+    let startX = -(bgScrollX % totalPanoramaWidth);
+
+    for (let loop = 0; loop < 2; loop++) {
+        let currentX = startX + (loop * totalPanoramaWidth);
+
+        cityBuildings.forEach(b => {
+            if (currentX + b.width > -100 && currentX < canvas.width + 100) {
+                let bColor = isEvening ? b.colorEvening : b.colorMorning;
+                let wColor = isEvening ? b.winEvening : b.winMorning;
+
+                drawPixelRect(currentX, groundY() - b.height, b.width, b.height, bColor);
+
+                if (b.type === 'SKYSCRAPER') {
+                    drawPixelRect(currentX + b.width/2 - 2, groundY() - b.height - 30, 4, 30, bColor);
+                    for (let wy = groundY() - b.height + 20; wy < groundY() - 30; wy += 45) {
+                        for (let wx = currentX + 15; wx < currentX + b.width - 20; wx += 30) {
+                            drawPixelRect(wx, wy, 12, 18, wColor);
+                        }
+                    }
+                } else {
+                    for (let wy = groundY() - b.height + 25; wy < groundY() - 30; wy += 50) {
+                        for (let wx = currentX + 20; wx < currentX + b.width - 20; wx += 40) {
+                            drawPixelRect(wx, wy, 16, 20, wColor);
+                        }
+                    }
+                }
+            }
+            currentX += b.width + gap;
+        });
+    }
+}
+
+function drawObstacle(obs) {
+    const pX = (px, py, w, h, c) => drawPixelRect(obs.x + px*P, obs.y + py*P, w*P, h*P, c);
+
+    if (obs.type === 'HUMAN') {
+        pX(2, 0, 4, 4, '#ffdbac');
+        pX(2, 0, 4, 1, '#111827');
+        pX(1, 4, 6, 6, '#dc2626');
+        pX(2, 10, 4, 5, '#374151');
+    } else if (obs.type === 'TREE') {
+        pX(3, 8, 2, 6, '#78350f');
+        pX(1, 1, 6, 7, '#15803d');
+        pX(0, 3, 8, 4, '#22c55e');
+    } else if (obs.type === 'CAR') {
+        pX(0, 4, 16, 5, '#b91c1c');
+        pX(3, 1, 9, 3, '#93c5fd');
+        pX(2, 8, 3, 2, '#111827');
+        pX(11, 8, 3, 2, '#111827');
+    } else if (obs.type === 'BIRD') {
+        let wing = Math.floor((globalTime / 150) % 2);
+        pX(2, 3, 6, 3, '#ea580c');
+        pX(7, 2, 2, 2, '#ef4444');
+        pX(8, 3, 2, 1, '#fbbf24');
+        if (wing === 0) pX(3, 0, 3, 3, '#ea580c');
+        else pX(3, 5, 3, 3, '#ea580c');
+    }
+}
+
+function drawPixelHuman(x, y, isDucking) {
+    const pX = (px, py, w, h, c) => drawPixelRect(x + px*P, y + py*P, w*P, h*P, c);
+
+    if (isDucking) {
+        pX(2, 0, 4, 3, '#ffdbac');
+        pX(2, 0, 4, 1, player.hairColor);
+        pX(1, 3, 6, 3, '#2563eb');
+        pX(0, 6, 7, 3, '#1e293b');
+    } else {
+        pX(2, 0, 4, 4, '#ffdbac');
+        pX(2, 0, 4, 1, player.hairColor);
+        pX(1, 1, 1, 2, player.hairColor);
+        pX(1, 4, 6, 6, '#2563eb');
+        let legShift = Math.floor((globalTime / 100) % 2);
+        pX(1 + legShift, 10, 2, 6, '#1e293b');
+        pX(5 - legShift, 10, 2, 6, '#1e293b');
+    }
+}
+
+function drawPixelAygul(x, y) {
+    const pX = (px, py, w, h, c) => drawPixelRect(x + px*P, y + py*P, w*P, h*P, c);
+
+    pX(1, 0, 6, 5, '#1c1917');
+    pX(1, 2, 4, 4, '#ffdbac');
+    pX(1, 0, 4, 2, '#1c1917');
+    pX(0, 2, 1, 3, '#1c1917');
+
+    pX(5, 3, 1, 1, '#f43f5e');
+    pX(6, 3, 2, 2, '#1c1917');
+    pX(6, 5, 2, 3, '#1c1917');
+    pX(7, 8, 2, 3, '#1c1917');
+
+    pX(1, 6, 6, 3, '#451a03'); 
+    pX(1, 9, 6, 1, '#78350f'); 
+    pX(1, 10, 6, 3, '#92400e'); 
+    pX(1, 13, 6, 3, '#b45309'); 
+}
+
+function drawPixelBouquet(x, y) {
+    drawPixelRect(x, y, 12, 12, '#16a34a');
+    drawPixelRect(x + 2, y - 4, 4, 4, '#e11d48');
+    drawPixelRect(x + 8, y - 2, 4, 4, '#e11d48');
+    drawPixelRect(x + 4, y + 4, 4, 4, '#e11d48');
+}
+
+function drawStartMenuArtwork() {
+    let artW = 220;
+    let artH = 140;
+    let artX = (canvas.width - artW) / 2;
+    let artY = canvas.height * 0.22;
+
+    drawPixelRect(artX - 8, artY - 8, artW + 16, artH + 16, '#ffffff');
+    drawPixelRect(artX - 4, artY - 4, artW + 8, artH + 8, '#000000');
+    drawPixelRect(artX, artY, artW, artH, '#7dd3fc');
+    drawPixelRect(artX + 150, artY + 20, 24, 24, '#fef08a');
+    drawPixelRect(artX + 20, artY + 40, 45, 100, '#0284c7');
+    drawPixelRect(artX + 80, artY + 25, 55, 115, '#38bdf8');
+    drawPixelRect(artX + 155, artY + 50, 45, 90, '#f43f5e');
+    drawPixelRect(artX, artY + 110, artW, 30, '#16a34a');
+    drawPixelRect(artX + 52, artY + 92, 8, 3, player.hairColor);
+    drawPixelRect(artX + 52, artY + 95, 8, 15, '#2563eb');
+    drawPixelRect(artX + 64, artY + 96, 8, 8, '#e11d48');
+    drawPixelRect(artX + 132, artY + 90, 10, 8, '#1c1917');
+    drawPixelRect(artX + 132, artY + 92, 10, 2, '#1c1917');
+    drawPixelRect(artX + 132, artY + 98, 10, 6, '#78350f');
+    drawPixelRect(artX + 132, artY + 104, 10, 8, '#b45309');
+}
+
+function update() {
+    if (gameState !== 'PLAYING' && gameState !== 'FINALE') return;
+
+    if (gameState === 'PLAYING') {
+        player.velocityY += player.gravity;
+        player.y += player.velocityY;
+
+        const currentGround = groundY() - player.height;
+        if (player.y >= currentGround) {
+            player.y = currentGround;
+            player.velocityY = 0;
+            player.isGrounded = true;
+        }
+
+        nextSpawnTimer++;
+        if (nextSpawnTimer > 110 && obstacleQueue.length > 0) {
+            spawnObstacle();
+            nextSpawnTimer = 0;
+        }
+
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let obs = obstacles[i];
+            obs.x -= 6.5;
+
+            if (
+                player.x < obs.x + obs.width &&
+                player.x + player.width > obs.x &&
+                player.y < obs.y + obs.height &&
+                player.y + player.height > obs.y
+            ) {
+                triggerGameOver(obs.type);
+                return;
+            }
+
+            if (obs.x < -100) obstacles.splice(i, 1);
+        }
+
+        if (currentObstacleCount >= TOTAL_OBSTACLES && obstacles.length === 0) {
+            gameState = 'FINALE';
+            pauseBtn.classList.add('hidden');
+        }
+    }
+
+    if (gameState === 'FINALE') {
+        player.isDucking = false;
+        player.height = player.normalHeight;
+        player.y = groundY() - player.height;
+
+        let targetAygulX = canvas.width * 0.6;
+        let targetPlayerX = targetAygulX - 60;
+
+        if (aygul.x > targetAygulX) aygul.x -= 3;
+        if (player.x < targetPlayerX) player.x += 3;
+
+        if (Math.abs(aygul.x - targetAygulX) < 5 && Math.abs(player.x - targetPlayerX) < 5) {
+            gameState = 'END';
+            
+            if (!finalTimerStarted) {
+                finalTimerStarted = true;
+                setTimeout(() => {
+                    if (gameState === 'END') {
+                        finalMenu.classList.remove('hidden');
+                    }
+                }, 5000);
+            }
+        }
+    }
+}
+
+function draw() {
+    drawCityBackground();
+
+    const isEvening = (gameState === 'FINALE' || gameState === 'END');
+    let grassColor = isEvening ? '#0f766e' : '#16a34a';
+    let dirtColor = isEvening ? '#78350f' : '#b45309';
+
+    drawPixelRect(0, groundY(), canvas.width, canvas.height - groundY(), grassColor);
+    drawPixelRect(0, groundY() + 8, canvas.width, canvas.height - groundY() - 8, dirtColor);
+
+    if (gameState === 'START') {
+        drawStartMenuArtwork();
+        return;
+    }
+
+    drawPixelHuman(player.x, player.y, player.isDucking);
+    obstacles.forEach(obs => drawObstacle(obs));
+
+    if (gameState === 'FINALE' || gameState === 'END') {
+        aygul.y = groundY() - aygul.height;
+        drawPixelAygul(aygul.x, aygul.y);
+
+        if (gameState === 'END') {
+            drawPixelBouquet(player.x + 28, player.y + 20);
+
+            ctx.fillStyle = '#f43f5e';
+            ctx.font = 'bold 36px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText('I love you Aygul ❤️', canvas.width / 2, canvas.height * 0.32);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 22px Courier New';
+            ctx.fillText('— Sapa', canvas.width / 2 + 100, canvas.height * 0.38);
+        }
+    }
+}
+
+let lastTime = 0;
+let accumulator = 0;
+const FIXED_STEP = 1000 / 60;
+
+function loop(timestamp) {
+    globalTime = timestamp;
+    if (!lastTime) lastTime = timestamp;
+    let frameTime = timestamp - lastTime;
+    lastTime = timestamp;
+
+    if (frameTime > 250) frameTime = 250;
+
+    accumulator += frameTime;
+
+    while (accumulator >= FIXED_STEP) {
+        update();
+        accumulator -= FIXED_STEP;
+    }
+
+    draw();
+    requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
